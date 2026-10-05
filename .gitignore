@@ -1,0 +1,15 @@
+# Godot 4 cache (.import files are intentionally committed)
+.godot/
+/android/
+
+# Exports
+build/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Local handoff notes (not part of the repo)
+SUMMARY.md
+.claude/settings.local.json
