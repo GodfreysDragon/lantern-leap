@@ -20,6 +20,7 @@ var _checks := 0
 
 func _ready() -> void:
 	Save.persist = false
+	Juice.hitstop_enabled = false
 	Save.best_times.clear()
 	Save.best_gems.clear()
 	_run.call_deferred()

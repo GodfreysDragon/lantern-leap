@@ -145,7 +145,7 @@ godot --path .
 
 ```bash
 godot --headless --path . --import   # first time only, builds the class cache
-godot --headless --path . --fixed-fps 120 res://tests/run_tests.tscn
+godot --headless --path . --fixed-fps 120 --quit-after 20000 res://tests/run_tests.tscn
 ```
 
 [`tests/run_tests.gd`](tests/run_tests.gd) runs 75 checks:

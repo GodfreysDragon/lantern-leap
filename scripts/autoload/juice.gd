@@ -3,6 +3,9 @@ extends Node
 ## can call `Juice.shake(0.3)` without needing a reference to the camera.
 
 var camera: GameCamera
+## Tests turn this off: frozen frames stay frozen for a fixed time on the wall
+## clock, which a fast headless run can burn through without advancing.
+var hitstop_enabled := true
 
 var _hitstop_end_ms := 0
 
@@ -26,6 +29,8 @@ func shake(trauma: float) -> void:
 ## Freezes the simulation for a few frames to sell an impact. Overlapping
 ## calls extend the freeze rather than cutting each other short.
 func hitstop(duration: float) -> void:
+	if not hitstop_enabled:
+		return
 	_hitstop_end_ms = maxi(_hitstop_end_ms, Time.get_ticks_msec() + int(duration * 1000.0))
 	Engine.time_scale = 0.0
 

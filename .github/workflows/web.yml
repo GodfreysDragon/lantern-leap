@@ -21,8 +21,9 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Godot + web export templates
         run: |
@@ -39,7 +40,11 @@ jobs:
         run: godot --headless --path . --import
 
       - name: Run tests
-        run: godot --headless --path . --fixed-fps 120 res://tests/run_tests.tscn
+        # --quit-after stops a hang (e.g. a script parse error) from stalling the
+        # job, but exits 0, so also require the suite's own all-passed summary.
+        run: |
+          godot --headless --path . --fixed-fps 120 --quit-after 20000 res://tests/run_tests.tscn | tee test.log
+          grep -q "checks, 0 failed" test.log
 
       - name: Export web build
         run: |
