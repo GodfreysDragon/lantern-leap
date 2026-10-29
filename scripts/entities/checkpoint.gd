@@ -34,7 +34,7 @@ func _on_body_entered(body: Node2D) -> void:
 	create_tween().tween_property(_light, "energy", 1.0, 0.4).from(3.0)
 	Fx.burst(get_parent(), position + Vector2(0, -22), FLAME, 16, 80.0, Vector2.UP, 120.0, 0.6, 80.0)
 	Sfx.play("checkpoint", 0.0)
-	reached.emit(position)
+	reached.emit(global_position)
 
 
 func _process(delta: float) -> void:

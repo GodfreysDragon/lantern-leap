@@ -2,7 +2,8 @@ class_name Player
 extends CharacterBody2D
 ## Platformer controller tuned for game feel rather than physical accuracy.
 ##
-## Forgiveness: coyote time, jump buffering, corner correction, wall coyote.
+## Forgiveness: ledge extensions (see Level), coyote time, jump buffering,
+## corner correction, wall coyote.
 ## Expressiveness: variable jump height, apex hang, fast-fall, 8-way dash with
 ## dash-jump momentum. Every tunable is exported so it can be tweaked live
 ## from the inspector while the game is running.
@@ -41,9 +42,11 @@ const SIZE := Vector2(10, 13)
 
 @export_group("Wall")
 @export var wall_slide_speed := 55.0
-@export var wall_jump_velocity := Vector2(150.0, 290.0)
+## A small sideways push keeps the player close to the wall, so a single
+## wall can be climbed by kicking off it repeatedly.
+@export var wall_jump_velocity := Vector2(80.0, 290.0)
 ## Horizontal input is ignored this long after a wall jump so the push-off reads.
-@export var wall_jump_lock := 0.13
+@export var wall_jump_lock := 0.08
 @export var wall_coyote_time := 0.08
 
 @export_group("Dash")
@@ -68,6 +71,7 @@ var _dash_dir := Vector2.ZERO
 var _ghost_timer := 0.0
 var _dust_timer := 0.0
 var _was_on_floor := true
+var _was_on_wall := false
 var _prev_velocity := Vector2.ZERO
 var _input := Vector2.ZERO
 var _light_energy := 1.0
@@ -95,6 +99,9 @@ func _physics_process(delta: float) -> void:
 		State.DASH:
 			_dash_step(delta)
 
+	# Ledge extensions only hold up a player who walks off an edge they were
+	# standing on. Anything airborne (jumps, falls, springs) passes through.
+	set_collision_mask_value(Level.LEDGE_LAYER, _was_on_floor and velocity.y >= 0.0)
 	_corner_correct(delta)
 	move_and_slide()
 	_after_move(delta)
@@ -317,6 +324,7 @@ func respawn(at: Vector2) -> void:
 	_jump_buffer = 0.0
 	_dash_buffer = 0.0
 	_wall_lock = 0.0
+	_was_on_wall = false
 	visual.visible = true
 	visual.dashing = false
 	visual.squash = Vector2(1.5, 0.5)
@@ -351,6 +359,13 @@ func _after_move(delta: float) -> void:
 		if impact > 0.9:
 			Juice.shake(0.12)
 	_was_on_floor = on_floor
+
+	# Touching a wall in the air refills the dash. Only a new touch counts, so
+	# dashing up along one wall can't be chained forever.
+	var on_wall := not on_floor and _wall_dir() != 0
+	if on_wall and not _was_on_wall:
+		has_dash = true
+	_was_on_wall = on_wall
 
 	# Run dust and skid puffs.
 	if on_floor and state == State.NORMAL:

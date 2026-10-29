@@ -64,8 +64,8 @@ func show_title(best_total: float) -> void:
 			UiKit.MUTED, HORIZONTAL_ALIGNMENT_CENTER))
 	col.add_child(UiKit.spacer(18))
 	for line in [
-		"move  arrows / WASD / stick      jump  space / Z / C / (A)",
-		"dash  X / shift / (X)      restart  R      pause  esc      mute  M",
+		"arrows  +  Z jump  +  X dash        or        WASD  +  J jump  +  K dash",
+		"gamepad  (A) jump  (X) dash      restart  R      pause  esc      mute  M",
 	]:
 		col.add_child(UiKit.label(line, 8, UiKit.MUTED, HORIZONTAL_ALIGNMENT_CENTER))
 

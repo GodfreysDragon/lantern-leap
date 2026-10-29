@@ -64,16 +64,20 @@ func set_time(seconds: float) -> void:
 	_timer.text = UiKit.format_time(seconds)
 
 
-func show_hint(text: String) -> void:
-	if text.is_empty():
-		return
-	_hint.text = text
+## Shows each tutorial line in turn, fading between them.
+func show_hints(lines: PackedStringArray) -> void:
 	if _hint_tween:
 		_hint_tween.kill()
+	_hint.modulate.a = 0.0
+	if lines.is_empty():
+		return
 	_hint_tween = create_tween()
-	_hint_tween.tween_property(_hint, "modulate:a", 1.0, 0.4).set_delay(0.6)
-	_hint_tween.tween_interval(5.0)
-	_hint_tween.tween_property(_hint, "modulate:a", 0.0, 0.8)
+	for i in lines.size():
+		var line := lines[i]
+		_hint_tween.tween_callback(func() -> void: _hint.text = line)
+		_hint_tween.tween_property(_hint, "modulate:a", 1.0, 0.4).set_delay(0.6 if i == 0 else 0.2)
+		_hint_tween.tween_interval(5.0)
+		_hint_tween.tween_property(_hint, "modulate:a", 0.0, 0.8)
 
 
 func _pulse(label: Label) -> void:

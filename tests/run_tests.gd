@@ -33,11 +33,14 @@ func _run() -> void:
 	print("\n== Movement contracts")
 	await _test_run_speed()
 	await _test_jump_heights()
+	await _test_ledge_extension()
 	await _test_coyote_time()
 	await _test_jump_buffer()
 	await _test_dash_distance()
 	await _test_corner_correction()
 	await _test_wall_slide_and_jump()
+	await _test_wall_climb()
+	await _test_wall_refills_dash()
 
 	print("\n== End-to-end")
 	await _test_full_run()
@@ -157,21 +160,79 @@ func _test_jump_heights() -> void:
 	await _teardown(p)
 
 
-func _test_coyote_time() -> void:
-	# Floor ends at x = 0; start just left of the edge and run off.
-	var p := await _make_arena()
-	p.get_parent().get_child(0).get_child(0).position.x = -800  # shift floor so it ends at x=0
-	p.global_position = Vector2(-20, 0)
-	await _frames(5)
+## A real Level: a ledge (top at y = 80, edge at x = 128) above a floor 3 tiles
+## lower, so the ledge extension spans x 128..144 at y = 80.
+const LEDGE_MAP := """---
+
+
+
+
+
+########
+########
+########
+####################
+"""
+
+
+func _make_ledge_level(at: Vector2) -> Player:
+	var level := Level.new()
+	level.build(LevelData.parse(LEDGE_MAP, "ledge_test"))
+	get_tree().root.add_child(level)
+	var player: Player = PLAYER_SCENE.instantiate()
+	level.add_child(player)
+	player.global_position = at
+	await _frames(10)
+	return player
+
+
+func _test_ledge_extension() -> void:
+	var p := await _make_ledge_level(Vector2(100, 80))
 	Input.action_press("move_right")
-	while p.is_on_floor():
+	while p.global_position.x < 138.0:  # body fully past the real edge (x 133..143)
 		await get_tree().physics_frame
-	await _frames(6)  # 50ms after leaving the ledge
-	_check(not p.is_on_floor(), "player has left the ledge")
+	_check(p.is_on_floor() and absf(p.global_position.y - 80.0) < 0.5,
+		"walking off a ledge is caught for one more tile (floor %s, y %.2f)" % [p.is_on_floor(), p.global_position.y])
 	Input.action_press("jump")
 	await _frames(2)
-	_check(p.velocity.y < 0.0, "jump still works 50ms after running off a ledge")
+	_check(p.velocity.y < 0.0, "jump works from the ledge extension")
 	await _teardown(p)
+
+	p = await _make_ledge_level(Vector2(100, 80))
+	Input.action_press("move_right")
+	while p.global_position.x < 160.0:
+		await get_tree().physics_frame
+	_check(not p.is_on_floor() and p.global_position.y > 80.0, "past the extension, the player falls")
+	await _teardown(p)
+
+	# Standing on the floor under the extension: a jump rises through it and
+	# the fall back down isn't caught by it.
+	p = await _make_ledge_level(Vector2(136, 128))
+	var peak := await _jump_height(p, 9999)
+	_check(peak > 48.0 + 4.0, "jumping up through a ledge extension isn't blocked (%.1fpx)" % peak)
+	await _frames(60)
+	_check(p.is_on_floor() and absf(p.global_position.y - 128.0) < 0.5,
+		"falling through a ledge extension isn't caught by it (floor %s, y %.2f)" % [p.is_on_floor(), p.global_position.y])
+	await _teardown(p)
+
+
+## Coyote time starts where the ledge extension ends: a jump pressed just
+## after walking off it still fires, one pressed much later doesn't.
+func _test_coyote_time() -> void:
+	for late: bool in [false, true]:
+		var p := await _make_ledge_level(Vector2(100, 80))
+		Input.action_press("move_right")
+		while p.is_on_floor():
+			await get_tree().physics_frame
+		Input.action_release("move_right")
+		await _frames(18 if late else 4)
+		Input.action_press("jump")
+		await _frames(2)
+		if late:
+			_check(p.velocity.y >= 0.0, "a jump long after leaving the ledge does nothing")
+		else:
+			_check(p.velocity.y < 0.0, "coyote time: a jump just after leaving the ledge extension fires")
+		await _teardown(p)
 
 
 func _test_jump_buffer() -> void:
@@ -241,6 +302,69 @@ func _test_wall_slide_and_jump() -> void:
 	_check(p.velocity.x < 0.0 and p.velocity.y < 0.0, "jumping on a wall kicks up and away")
 	await _frames(8)
 	_check(p.global_position.y < y_before, "wall jump gains height")
+	await _teardown(p)
+
+
+## Climbing a single wall by holding toward it and jumping whenever it's
+## touched. Returns [height gained in 1.5s, furthest push-out from the wall].
+func _climb_wall(p: Player) -> Array[float]:
+	var start_y := p.global_position.y
+	var furthest := 0.0
+	Input.action_press("move_right")
+	await _frames(2)
+	var left_wall := true
+	for i in 180:
+		# Hold jump for full height, re-pressing it each time the wall is touched again.
+		if not Input.is_action_pressed("jump"):
+			Input.action_press("jump")
+		elif left_wall and (p.is_on_wall() or p.is_on_floor()):
+			Input.action_release("jump")
+			left_wall = false
+		elif not p.is_on_wall():
+			left_wall = true
+		await get_tree().physics_frame
+		if p.global_position.y < start_y - 4.0:
+			furthest = maxf(furthest, 8.0 - (p.global_position.x + Player.SIZE.x * 0.5))
+	_release_all()
+	return [start_y - p.global_position.y, furthest]
+
+
+func _test_wall_climb() -> void:
+	var p := await _make_arena([Rect2(8, -900, 16, 900)])
+	p.global_position.x = 3.0  # flush against the wall face
+	await _frames(2)
+	var result := await _climb_wall(p)
+	_check(result[0] > 200.0, "a single wall climbs fast (%.0fpx in 1.5s)" % result[0])
+	_check(result[1] < 12.0, "a wall jump pushes out less than a tile (%.1fpx)" % result[1])
+	await _teardown(p)
+
+
+func _test_wall_refills_dash() -> void:
+	# Wall face 3px to the right: spend the dash in the air, then drift into it.
+	var p := await _make_arena([Rect2(8, -300, 16, 300)])
+	Input.action_press("jump")
+	await _frames(6)
+	Input.action_press("move_up")
+	Input.action_press("dash")
+	await _frames(2)
+	Input.action_release("dash")
+	Input.action_release("move_up")
+	_check(not p.has_dash and not p.is_on_wall(), "dash spent in the air, clear of the wall")
+	while p.state == Player.State.DASH:
+		await get_tree().physics_frame
+	Input.action_press("move_right")
+	for i in 60:
+		await get_tree().physics_frame
+		if p.has_dash:
+			break
+	_check(p.has_dash and not p.is_on_floor(), "touching a wall refills the dash")
+	# Dashing up along the same wall spends it; staying in contact doesn't refill.
+	Input.action_press("move_up")
+	Input.action_press("dash")
+	await _frames(2)
+	Input.action_release("dash")
+	await _frames(20)
+	_check(not p.has_dash, "staying on the wall doesn't refill it again")
 	await _teardown(p)
 
 

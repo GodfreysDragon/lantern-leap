@@ -19,7 +19,7 @@ const START := "P"
 
 var id := ""
 var name := "Untitled"
-var hint := ""
+var hints := PackedStringArray()
 var rows := PackedStringArray()
 var width := 0
 var height := 0
@@ -48,7 +48,7 @@ static func parse(text: String, level_id: String) -> LevelData:
 			var value := line.substr(line.find(":") + 1).strip_edges()
 			match key:
 				"name": data.name = value
-				"hint": data.hint = value
+				"hint": data.hints.append(value)
 
 	while not data.rows.is_empty() and data.rows[-1].strip_edges().is_empty():
 		data.rows.remove_at(data.rows.size() - 1)

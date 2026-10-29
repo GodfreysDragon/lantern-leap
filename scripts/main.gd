@@ -115,7 +115,7 @@ func _go_to_level(index: int) -> void:
 	hud.visible = true
 	mode = Mode.PLAYING
 	screens.fade(0.0, 0.35)
-	hud.show_hint(level.data.hint)
+	hud.show_hints(level.data.hints)
 
 
 func _build_level(index: int) -> void:

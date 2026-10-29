@@ -19,14 +19,19 @@ in code. The whole game pack is about **90 KB**.
 
 ## Controls
 
-| Action | Keyboard | Gamepad |
-|---|---|---|
-| Move | Arrows / WASD | Left stick / D-pad |
-| Jump (hold for height) | Space / Z / C / J | A |
-| Dash (8 directions) | X / Shift / K | X / B / RB |
-| Restart from checkpoint | R | Back |
-| Pause | Esc / P | Start |
-| Mute | M | |
+Two keyboard layouts are supported, so movement and actions are always on
+separate hands:
+
+| Action | Arrow keys | WASD | Gamepad |
+|---|---|---|---|
+| Move | Arrows | WASD | Left stick / D-pad |
+| Jump (hold for height) | Z | J / Space | A |
+| Dash (8 directions) | X | K | X / B / RB |
+| Restart from checkpoint | R | R | Back |
+| Pause | Esc / P | Esc / P | Start |
+| Mute | M | M | |
+
+C (jump) and Shift (dash) are also bound.
 
 ## What it demonstrates
 
@@ -34,7 +39,12 @@ in code. The whole game pack is about **90 KB**.
 Every tunable is an `@export`, so the feel can be adjusted live from the
 inspector while the game runs.
 
-- **Coyote time** (100 ms): you can still jump just after running off a ledge.
+- **Ledge extensions**: walk off a platform edge and you keep your footing for
+  one more tile, so you can still jump. They are invisible one-way ledges that
+  the player collides with only while standing, so they never catch a jump or
+  a fall ([`level.gd`](scripts/level/level.gd)).
+- **Coyote time** (100 ms): a jump pressed just after leaving the ground, or
+  the end of a ledge extension, still fires.
 - **Jump buffering** (120 ms): a jump pressed just before landing still fires.
 - **Variable jump height**: releasing jump early cuts the rise. A buffered tap
   that is already released also gives a short hop.
@@ -44,11 +54,13 @@ inspector while the game runs.
   fast-falls.
 - **Corner correction**: if your head clips a ceiling edge by up to 5 px, you
   slide around it instead of stopping dead.
-- **Wall slide and wall jump**, with a short input lock after the kick so the
-  push-off reads clearly, plus wall coyote time.
+- **Wall slide and wall jump**, with wall coyote time and a short input lock
+  after the kick. The kick pushes out only half a tile, so you can climb a
+  single wall by kicking off it again and again.
 - **8-way dash** with a brief hit-stop, after-images and momentum that carries
   out of it. A dash-jump off the ground keeps the dash speed. The dash refills
-  on landing, on springs and at crystals.
+  on landing, on springs, at crystals and when you touch a wall in the air
+  (a new touch only, so you can't chain dashes up one wall).
 - **Turnaround boost**: acceleration is higher when you reverse direction, so
   turns feel snappy.
 
@@ -83,7 +95,10 @@ for the tile legend and the movement budget used to size the jumps.
    launches you into a second shaft.
 3. **Glass Air** brings in the dash. The first gap is one tile too wide to
    jump, so the dash is required. Later sections use crystals to chain dashes
-   over long gaps.
+   over long gaps. A drop from a thin ledge, too deep to climb back and past a
+   spike-lined wall, makes it clear there is no way back. Climbing out of the
+   well below is the
+   next challenge.
 4. **Crumbling Way** mixes everything with blocks that collapse 0.45 s after
    you touch them.
 
@@ -133,15 +148,17 @@ godot --headless --path . --import   # first time only, builds the class cache
 godot --headless --path . --fixed-fps 120 res://tests/run_tests.tscn
 ```
 
-[`tests/run_tests.gd`](tests/run_tests.gd) runs 65 checks:
+[`tests/run_tests.gd`](tests/run_tests.gd) runs 75 checks:
 
 - **Level lint**: exactly one start and one exit, known tiles only, door
   headroom, springs and checkpoints are grounded.
 - **Movement contracts**: these drive the real player scene with synthetic
   input on a deterministic fixed timestep, and check that a full jump clears
-  3 tiles but not 4, a tap gives a short hop, coyote time and jump buffering
-  work, the dash covers about 3 tiles and recharges, corner correction slides
-  past a ledge, and wall slide and wall jump behave. Level design depends on
+  3 tiles but not 4, a tap gives a short hop, a ledge extension holds a
+  player who walks off an edge but never one who jumps or falls through it,
+  coyote time starts where the extension ends, jump buffering works, the dash covers about 3 tiles and recharges, corner correction slides
+  past a ledge, wall slide and wall jump behave, a single wall climbs quickly,
+  and touching a wall refills the dash once. Level design depends on
   these numbers, so retuning the controller cannot silently make a level
   impossible.
 - **End-to-end**: boots the real main scene, starts from the title, dies and
@@ -169,3 +186,7 @@ tests, exports the web build and deploys it to **GitHub Pages** on every push to
 1. Create `levels/05_whatever.txt` (copy an existing one for the format).
 2. Append its path to `LEVELS` in [`scripts/main.gd`](scripts/main.gd).
 3. Run the tests. The lint and end-to-end checks pick it up automatically.
+
+## License
+
+[MIT](LICENSE)

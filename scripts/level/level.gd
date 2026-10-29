@@ -8,6 +8,8 @@ signal checkpoint_reached(spawn: Vector2)
 signal exit_reached
 
 const TILE := 16
+## Physics layer of the invisible ledge extensions (see _build_ledges).
+const LEDGE_LAYER := 4
 const AMBIENT := Color(0.5, 0.46, 0.66)
 
 var data: LevelData
@@ -29,6 +31,7 @@ func build(level_data: LevelData) -> void:
 	add_child(art)
 
 	_build_solids()
+	_build_ledges()
 	_build_side_walls()
 	_build_entities()
 
@@ -133,6 +136,43 @@ func _row_free(x: int, y: int, w: int, used: Dictionary) -> bool:
 	return true
 
 
+## Invisible one-tile extensions past platform edges: walking off a ledge,
+## the player keeps their footing for one more tile and can still jump. The
+## player only collides with them while grounded (see Player), so they never
+## catch a jump or a fall, and they take the place of coyote time.
+func _build_ledges() -> void:
+	var body := StaticBody2D.new()
+	body.name = "Ledges"
+	body.collision_layer = 0
+	body.set_collision_layer_value(LEDGE_LAYER, true)
+	body.collision_mask = 0
+	add_child(body)
+	for y in data.height:
+		for x in data.width:
+			for dir: int in [-1, 1]:
+				if _has_ledge(x, y, dir):
+					_add_one_way_shape(body, Vector2(x + dir, y) * TILE)
+
+
+func _has_ledge(x: int, y: int, dir: int) -> bool:
+	var standable := LevelData.SOLID + LevelData.ONE_WAY
+	var blocking := standable + LevelData.CRUMBLE
+	var nx := x + dir
+	if y == 0 or not data.cell(x, y) in standable or data.cell(x, y - 1) in blocking:
+		return false  # not the exposed top of a platform
+	if nx < 0 or nx >= data.width:
+		return false
+	# Room to stand, nothing sharp within reach, and a real drop below (a one-
+	# tile step down needs no help, and the shape would overlap the player).
+	for c in [data.cell(nx, y), data.cell(nx, y - 1), data.cell(nx + dir, y - 1)]:
+		if c in blocking or c == LevelData.SPIKE:
+			return false
+	if data.cell(nx, y + 1) in blocking:
+		return false
+	# Gaps narrower than three tiles would be bridged; they're an easy jump anyway.
+	return not (data.cell(nx + dir, y) in blocking or data.cell(nx + dir * 2, y) in blocking)
+
+
 ## Invisible walls on the left/right edges (tall, so you can't hop over them).
 func _build_side_walls() -> void:
 	var body := StaticBody2D.new()
@@ -148,15 +188,18 @@ func _build_side_walls() -> void:
 func _add_one_way(top_left: Vector2) -> void:
 	var body := StaticBody2D.new()
 	body.collision_mask = 0
-	body.position = top_left
+	add_child(body)
+	_add_one_way_shape(body, top_left)
+
+
+static func _add_one_way_shape(body: StaticBody2D, top_left: Vector2) -> void:
 	var shape := CollisionShape2D.new()
 	var rect := RectangleShape2D.new()
 	rect.size = Vector2(TILE, 4)
 	shape.shape = rect
-	shape.position = Vector2(TILE * 0.5, 2)
+	shape.position = top_left + Vector2(TILE * 0.5, 2)
 	shape.one_way_collision = true
 	body.add_child(shape)
-	add_child(body)
 
 
 static func _add_rect(body: StaticBody2D, rect: Rect2) -> void:

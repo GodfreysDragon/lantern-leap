@@ -42,6 +42,7 @@ common/max_physics_steps_per_frame=12
 2d_physics/layer_1="world"
 2d_physics/layer_2="player"
 2d_physics/layer_3="pickups"
+2d_physics/layer_4="ledges"
 
 [rendering]
 
