@@ -5,6 +5,9 @@ A compact precision platformer made in **Godot 4.7** and exported to the web
 across four levels. Each level introduces one mechanic: running and jumping,
 wall jumps, the dash, and crumbling blocks.
 
+**[Play it in your browser](https://godfreysdragon.github.io/lantern-leap/)**
+(keyboard or gamepad).
+
 The project is a game-feel showcase rather than a content-heavy game. Almost
 all of the effort went into how the character *moves and responds*. There are
 no art or audio files: every sprite, tile, light and sound effect is generated
