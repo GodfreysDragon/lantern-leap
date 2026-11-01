@@ -86,6 +86,12 @@ func _lint_level(path: String) -> void:
 		_check(data.is_solid(s.x, s.y + 1), "%s start is on solid ground" % data.id)
 	for c in data.find(LevelData.CHECKPOINT) + data.find(LevelData.SPRING):
 		_check(data.is_solid(c.x, c.y + 1), "%s %s at %s is grounded" % [data.id, data.cell(c.x, c.y), c])
+	# A tip must sit where the player can stand, or it would never show.
+	for tip in data.tips:
+		var at: Vector2i = tip.cell
+		_check(at.x >= 0 and at.y >= 0 and at.x < data.width and at.y < data.height \
+				and not data.is_solid(at.x, at.y),
+			"%s tip at %s is in open space" % [data.id, at])
 
 
 # --- movement contracts ------------------------------------------------------
@@ -375,6 +381,7 @@ func _test_full_run() -> void:
 	var main: Node = load("res://scenes/main.tscn").instantiate()
 	get_tree().root.add_child(main)
 	await _frames(10)
+	_check(main.unlocked_count() == 1, "only the first level is unlocked on a fresh save")
 	_press("jump")
 	await _wait_for(func() -> bool: return main.mode == main.Mode.PLAYING, 240)
 	_check(main.mode == main.Mode.PLAYING, "title -> playing")
@@ -391,6 +398,7 @@ func _test_full_run() -> void:
 			_check(main.level_deaths == 1, "death is counted")
 			await _wait_for(func() -> bool: return player.state == Player.State.NORMAL, 240)
 			_check(player.global_position.distance_to(level.spawn_point) < 1.0, "respawned at spawn")
+			await _test_gem_banking(main, level, player)
 
 		# Teleport onto the exit; the door should end the level.
 		var exit_cell: Vector2i = level.data.find(LevelData.EXIT)[0]
@@ -405,8 +413,88 @@ func _test_full_run() -> void:
 
 	await _wait_for(func() -> bool: return main.mode == main.Mode.TITLE, 240)
 	_check(main.mode == main.Mode.TITLE, "finale returns to title")
+
+	# Level select: every level is unlocked now; replay the last one alone.
+	_check(main.unlocked_count() == MainScript.LEVELS.size(), "a full run unlocks every level")
+	_press("dash")
+	await _frames(2)
+	_check(main.mode == main.Mode.SELECT, "dash on the title opens the level select")
+	for i in MainScript.LEVELS.size():
+		_press("move_down")
+		await _frames(2)
+	_check(main.select_index == MainScript.LEVELS.size() - 1, "selection stops at the last level")
+	_press("jump")
+	await _wait_for(func() -> bool: return main.mode == main.Mode.PLAYING, 240)
+	_check(main.practice and main.level.data.id == "05_crumbling_way", "level select starts the chosen level")
+	var exit: Vector2i = main.level.data.find(LevelData.EXIT)[0]
+	main.player.global_position = (Vector2(exit) + Vector2(0.5, 1.0)) * TILE
+	await _wait_for(func() -> bool: return main.mode == main.Mode.CLEAR, 240)
+	_press("jump")
+	await _wait_for(func() -> bool: return main.mode == main.Mode.SELECT, 240)
+	_check(main.mode == main.Mode.SELECT, "clearing a selected level returns to the level select")
+
+	# Bots: each level's recorded speedrun still finishes in the real game. If
+	# a level or the movement changes, regenerate the data with tools/bots.tscn.
+	for i in MainScript.LEVELS.size():
+		var id := String(MainScript.LEVELS[i]).get_file().get_basename()
+		var best_before: float = Save.best_times.get(id, 0.0)
+		main.select_index = i
+		_press("bot_speedrun")
+		await _wait_for(func() -> bool: return main.mode == main.Mode.PLAYING, 240)
+		_check(is_instance_valid(main._bot), "level %d: 1 in the level select starts the speedrun bot" % (i + 1))
+		await _wait_for(func() -> bool: return main.mode == main.Mode.CLEAR, 120 * 90)
+		_check(main.mode == main.Mode.CLEAR and main.level_deaths == 0,
+			"level %d: the speedrun bot finishes without dying (%.1f s)" % [i + 1, main.level_time])
+		_check(Save.best_times.get(id, 0.0) == best_before, "level %d: a bot's run isn't saved as a best time" % (i + 1))
+		_press("jump")
+		await _wait_for(func() -> bool: return main.mode == main.Mode.SELECT, 240)
+
+	# The normal-player bot plays live; it should at least get going.
+	main.select_index = 0
+	_press("bot_normal")
+	await _wait_for(func() -> bool: return main.mode == main.Mode.PLAYING, 240)
+	var start_x: float = main.player.global_position.x
+	await _wait_for(func() -> bool: return main.player.global_position.x > start_x + 8 * TILE, 120 * 20)
+	_check(main.player.global_position.x > start_x + 8 * TILE, "the normal-player bot makes progress")
 	main.queue_free()
 	await _frames(2)
+
+
+## A death loses the gems taken since the last checkpoint and puts them back;
+## gems held when a checkpoint is lit are kept.
+func _test_gem_banking(main: Node, level: Level, player: Player) -> void:
+	var gems: Array[Gem] = []
+	for child in level.get_children():
+		if child is Gem:
+			gems.append(child)
+	var checkpoints: Array[Vector2i] = level.data.find(LevelData.CHECKPOINT)
+	if gems.size() < 2 or checkpoints.is_empty():
+		_check(false, "level 1 has two gems and a checkpoint for the banking test")
+		return
+	var take := func(gem: Gem) -> void:
+		player.velocity = Vector2.ZERO
+		player.global_position = gem.global_position + Vector2(0, 6)
+	var die_and_respawn := func() -> void:
+		player.die()
+		await _wait_for(func() -> bool: return player.state == Player.State.NORMAL, 240)
+
+	take.call(gems[0])
+	await _frames(3)
+	_check(main.level_gems == 1, "taking a gem counts it")
+	await die_and_respawn.call()
+	_check(main.level_gems == 0, "dying before a checkpoint loses the gem")
+	_check(gems[0].visible and not gems[0]._taken, "a lost gem is put back")
+
+	take.call(gems[0])
+	await _frames(3)
+	player.global_position = (Vector2(checkpoints[0]) + Vector2(0.5, 1.0)) * TILE
+	await _frames(3)
+	take.call(gems[1])
+	await _frames(3)
+	_check(main.level_gems == 2, "a gem after the checkpoint counts too")
+	await die_and_respawn.call()
+	_check(main.level_gems == 1, "dying keeps gems banked at the checkpoint, loses the rest")
+	_check(not gems[0].visible and gems[1].visible, "only the unbanked gem is put back")
 
 
 func _press(action: String) -> void:

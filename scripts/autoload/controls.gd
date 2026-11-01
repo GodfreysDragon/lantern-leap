@@ -14,6 +14,9 @@ const KEYS := {
 	"pause": [KEY_ESCAPE, KEY_P],
 	"restart": [KEY_R],
 	"mute": [KEY_M],
+	# Level select: watch a bot play the selected level (see BotDriver).
+	"bot_speedrun": [KEY_1],
+	"bot_normal": [KEY_2],
 }
 
 const PAD_BUTTONS := {

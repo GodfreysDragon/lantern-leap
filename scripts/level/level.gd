@@ -16,6 +16,8 @@ var data: LevelData
 var spawn_point := Vector2.ZERO
 var bounds := Rect2()
 var gem_total := 0
+## Gems taken since the last checkpoint; a death puts them back.
+var _unbanked: Array[Gem] = []
 
 
 func build(level_data: LevelData) -> void:
@@ -37,10 +39,27 @@ func build(level_data: LevelData) -> void:
 
 
 ## Called on player death: crumbled blocks and used crystals come back.
+## Called on respawn. Also puts back every gem taken since the last
+## checkpoint, since a death loses them.
 func reset_transients() -> void:
 	for child in get_children():
 		if child.has_method("reset_state"):
 			child.reset_state()
+	for gem in _unbanked:
+		gem.restore()
+	_unbanked.clear()
+
+
+func _on_gem_collected(gem: Gem) -> void:
+	_unbanked.append(gem)
+	gem_collected.emit()
+
+
+## Lighting a checkpoint banks the gems carried so far: a death no longer
+## loses them.
+func _on_checkpoint_reached(spawn: Vector2) -> void:
+	_unbanked.clear()
+	checkpoint_reached.emit(spawn)
 
 
 func _build_entities() -> void:
@@ -57,12 +76,12 @@ func _build_entities() -> void:
 				LevelData.SPIKE:
 					var spike := Spike.new()
 					spike.position = center
-					spike.setup(_spike_direction(x, y))
+					spike.setup(spike_direction(data, x, y))
 					add_child(spike)
 				LevelData.GEM:
 					var gem := Gem.new()
 					gem.position = center
-					gem.collected.connect(gem_collected.emit)
+					gem.collected.connect(_on_gem_collected.bind(gem))
 					add_child(gem)
 					gem_total += 1
 				LevelData.SPRING:
@@ -80,7 +99,7 @@ func _build_entities() -> void:
 				LevelData.CHECKPOINT:
 					var checkpoint := Checkpoint.new()
 					checkpoint.position = bottom
-					checkpoint.reached.connect(checkpoint_reached.emit)
+					checkpoint.reached.connect(_on_checkpoint_reached)
 					add_child(checkpoint)
 				LevelData.EXIT:
 					var door := ExitDoor.new()
@@ -91,7 +110,7 @@ func _build_entities() -> void:
 
 ## Spikes point away from whatever they're attached to, so the level text
 ## only needs a single spike character.
-func _spike_direction(x: int, y: int) -> Vector2:
+static func spike_direction(data: LevelData, x: int, y: int) -> Vector2:
 	if data.is_solid(x, y + 1):
 		return Vector2.UP
 	if data.is_solid(x, y - 1):

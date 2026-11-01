@@ -13,3 +13,6 @@ Thumbs.db
 # Local handoff notes (not part of the repo)
 SUMMARY.md
 .claude/settings.local.json
+
+# Design review notes (kept out of the repo)
+/design review/

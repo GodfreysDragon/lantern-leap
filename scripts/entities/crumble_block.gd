@@ -26,6 +26,7 @@ func _ready() -> void:
 	_shape.shape = rect
 	_shape.position = Vector2(TILE, TILE) * 0.5
 	add_child(_shape)
+	_set_awake(false)
 
 
 func touch() -> void:
@@ -33,6 +34,7 @@ func touch() -> void:
 		return
 	_state = State.SHAKING
 	_timer = SHAKE_TIME
+	_set_awake(true)
 	Sfx.play("crumble", 0.1, -8.0)
 
 
@@ -40,7 +42,14 @@ func reset_state() -> void:
 	_state = State.SOLID
 	_appear = 1.0
 	_shape.set_deferred("disabled", false)
+	_set_awake(false)
 	queue_redraw()
+
+
+## Untouched blocks sleep, so a level full of them costs nothing per frame.
+func _set_awake(awake: bool) -> void:
+	set_physics_process(awake)
+	set_process(awake)
 
 
 func _physics_process(delta: float) -> void:
@@ -64,6 +73,8 @@ func _process(delta: float) -> void:
 	if _state == State.SHAKING or _appear < 1.0:
 		_appear = move_toward(_appear, 1.0, delta * 6.0)
 		queue_redraw()
+	elif _state == State.SOLID:
+		_set_awake(false)
 
 
 func _break() -> void:

@@ -20,6 +20,9 @@ const START := "P"
 var id := ""
 var name := "Untitled"
 var hints := PackedStringArray()
+## Hints tied to a place: {cell: Vector2i, text: String}, shown when the player
+## reaches that cell (see main.gd).
+var tips: Array[Dictionary] = []
 var rows := PackedStringArray()
 var width := 0
 var height := 0
@@ -49,6 +52,13 @@ static func parse(text: String, level_id: String) -> LevelData:
 			match key:
 				"name": data.name = value
 				"hint": data.hints.append(value)
+				"tip":
+					# tip: <column> <row> <text>
+					var parts := value.split(" ", false, 2)
+					if parts.size() == 3 and parts[0].is_valid_int() and parts[1].is_valid_int():
+						data.tips.append({"cell": Vector2i(parts[0].to_int(), parts[1].to_int()), "text": parts[2]})
+					else:
+						push_error("Bad tip line in %s: %s" % [level_id, line])
 
 	while not data.rows.is_empty() and data.rows[-1].strip_edges().is_empty():
 		data.rows.remove_at(data.rows.size() - 1)

@@ -1,6 +1,7 @@
 class_name Screens
 extends CanvasLayer
-## Full-screen menus (title, pause, level clear, finale) and the fade curtain.
+## Full-screen menus (title, level select, pause, level clear, finale) and the
+## fade curtain.
 ## Purely presentational; the game loop in main.gd decides when to show what.
 
 var _current: Control
@@ -62,12 +63,47 @@ func show_title(best_total: float) -> void:
 	if best_total > 0.0:
 		col.add_child(UiKit.label("best run  %s" % UiKit.format_time(best_total), 9,
 			UiKit.MUTED, HORIZONTAL_ALIGNMENT_CENTER))
+	col.add_child(UiKit.label("press  DASH  for level select", 9, UiKit.MUTED,
+		HORIZONTAL_ALIGNMENT_CENTER))
 	col.add_child(UiKit.spacer(18))
 	for line in [
 		"arrows  +  Z jump  +  X dash        or        WASD  +  J jump  +  K dash",
 		"gamepad  (A) jump  (X) dash      restart  R      pause  esc      mute  M",
 	]:
 		col.add_child(UiKit.label(line, 8, UiKit.MUTED, HORIZONTAL_ALIGNMENT_CENTER))
+
+
+## entries: one Dictionary per level with name, unlocked, best_time, gems and
+## gem_total. Rebuilt on every selection change, without the fade-in.
+func show_level_select(entries: Array[Dictionary], selected: int) -> void:
+	var col := _open(0.0, false)
+	col.add_child(UiKit.label("LEVEL SELECT", 24, UiKit.ACCENT, HORIZONTAL_ALIGNMENT_CENTER))
+	col.add_child(UiKit.spacer(10))
+	for i in entries.size():
+		var entry := entries[i]
+		var text: String
+		var color := UiKit.TEXT
+		if not entry.unlocked:
+			text = "%d.  locked" % (i + 1)
+			color = UiKit.MUTED.darkened(0.35)
+		else:
+			text = "%d.  %s" % [i + 1, entry.name]
+			if entry.best_time > 0.0:
+				text += "     %s     gems %d / %d" % [UiKit.format_time(entry.best_time),
+					entry.gems, entry.gem_total]
+			if i != selected:
+				color = UiKit.MUTED
+		if i == selected:
+			text = ">  %s  <" % text
+			color = UiKit.ACCENT
+		col.add_child(UiKit.label(text, 11, color, HORIZONTAL_ALIGNMENT_CENTER))
+	col.add_child(UiKit.spacer(16))
+	col.add_child(UiKit.label("up / down   choose      jump   play      dash   back", 9,
+		UiKit.MUTED, HORIZONTAL_ALIGNMENT_CENTER))
+	col.add_child(UiKit.label("1   watch the speedrun bot      2   watch the normal-player bot", 8,
+		UiKit.MUTED, HORIZONTAL_ALIGNMENT_CENTER))
+	col.add_child(UiKit.label("clear a level to unlock the next", 8, UiKit.MUTED,
+		HORIZONTAL_ALIGNMENT_CENTER))
 
 
 func show_pause() -> void:
@@ -80,7 +116,7 @@ func show_pause() -> void:
 
 
 func show_level_clear(title: String, time: float, new_best: bool, gems: int,
-		gem_total: int, deaths: int) -> void:
+		gem_total: int, deaths: int, prompt := "press  JUMP  to continue") -> void:
 	var col := _open(0.6)
 	col.add_child(UiKit.label("LEVEL CLEAR", 24, UiKit.ACCENT, HORIZONTAL_ALIGNMENT_CENTER))
 	col.add_child(UiKit.label(title, 10, UiKit.MUTED, HORIZONTAL_ALIGNMENT_CENTER))
@@ -94,7 +130,7 @@ func show_level_clear(title: String, time: float, new_best: bool, gems: int,
 			Color(0.55, 1.0, 0.8), HORIZONTAL_ALIGNMENT_CENTER))
 	col.add_child(UiKit.label("deaths   %d" % deaths, 12, UiKit.TEXT, HORIZONTAL_ALIGNMENT_CENTER))
 	col.add_child(UiKit.spacer(16))
-	_blink_label = UiKit.label("press  JUMP  to continue", 10, UiKit.TEXT, HORIZONTAL_ALIGNMENT_CENTER)
+	_blink_label = UiKit.label(prompt, 10, UiKit.TEXT, HORIZONTAL_ALIGNMENT_CENTER)
 	col.add_child(_blink_label)
 
 
@@ -115,14 +151,16 @@ func show_finale(time: float, new_best: bool, gems: int, gem_total: int, deaths:
 	col.add_child(_blink_label)
 
 
-func _open(dim: float) -> VBoxContainer:
+func _open(dim: float, fade_in := true) -> VBoxContainer:
 	hide_screen()
+	_mascot = null
 	_current = UiKit.screen(dim)
 	add_child(_current)
 	move_child(_current, 0)  # keep the fade curtain on top
 	var col: VBoxContainer = _current.get_node("Column")
-	col.modulate.a = 0.0
-	create_tween().tween_property(col, "modulate:a", 1.0, 0.25)
+	if fade_in:
+		col.modulate.a = 0.0
+		create_tween().tween_property(col, "modulate:a", 1.0, 0.25)
 	return col
 
 

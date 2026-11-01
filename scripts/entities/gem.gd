@@ -1,6 +1,8 @@
 class_name Gem
 extends Area2D
-## Optional collectible. Bobs, glows, and pops with a little fanfare.
+## Optional collectible. Bobs, glows, and pops with a little fanfare. A taken
+## gem only hides: the level puts it back if the player dies before banking it
+## at a checkpoint.
 
 signal collected
 
@@ -8,6 +10,7 @@ const COLOR := Color(0.45, 1.0, 0.78)
 
 var _time := randf() * TAU
 var _taken := false
+var _tween: Tween
 
 
 func _ready() -> void:
@@ -35,10 +38,23 @@ func _on_body_entered(body: Node2D) -> void:
 	Fx.burst(get_parent(), position, COLOR, 14, 90.0, Vector2.UP, 180.0, 0.5, 60.0)
 	Sfx.play("gem", 0.0)
 	collected.emit()
-	var tween := create_tween().set_parallel()
-	tween.tween_property(self, "scale", Vector2(1.8, 1.8), 0.18).set_ease(Tween.EASE_OUT)
-	tween.tween_property(self, "modulate:a", 0.0, 0.18)
-	tween.chain().tween_callback(queue_free)
+	_tween = create_tween().set_parallel()
+	_tween.tween_property(self, "scale", Vector2(1.8, 1.8), 0.18).set_ease(Tween.EASE_OUT)
+	_tween.tween_property(self, "modulate:a", 0.0, 0.18)
+	_tween.chain().tween_callback(hide)
+
+
+## Puts a taken gem back where it was, ready to collect again.
+func restore() -> void:
+	if not _taken:
+		return
+	if _tween:
+		_tween.kill()
+	_taken = false
+	scale = Vector2.ONE
+	modulate.a = 1.0
+	show()
+	set_deferred("monitoring", true)
 
 
 func _draw() -> void:
